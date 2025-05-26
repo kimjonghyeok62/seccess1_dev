@@ -88,8 +88,10 @@ const MapComponent = forwardRef<L.Map, MapComponentProps>(({ markers }, ref) => 
     };
   }, []);
 
-  const getMapUrl = (type: string) => {
-    const key = process.env.NEXT_PUBLIC_VWORLD_API_KEY;
+  const VWORLD_KEY = process.env.NEXT_PUBLIC_VWORLD_API_KEY;
+
+const getMapUrl = (type: string) => {
+    const key = VWORLD_KEY;
     switch (type) {
       case 'satellite':
         return `http://api.vworld.kr/req/wmts/1.0.0/${key}/Satellite/{z}/{y}/{x}.jpeg`;
