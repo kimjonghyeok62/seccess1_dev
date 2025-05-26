@@ -24,12 +24,19 @@ async function callVWorldAPI(address: string, type: 'road' | 'parcel' = 'road', 
 
   const VWORLD_API_DOMAIN = 'http://api.vworld.kr/req/address';
   
-  // 주소 디코딩 후 다시 인코딩
-  const decodedAddress = decodeURIComponent(address);
+  // 주소가 이미 인코딩되어 있는지 확인하고 디코딩
+  const isEncoded = address.includes('%');
+  const decodedAddress = isEncoded ? decodeURIComponent(address) : address;
+  
+  // 한 번만 인코딩
   const encodedAddress = encodeURIComponent(decodedAddress);
-  console.log('Original address:', address);
-  console.log('Decoded address:', decodedAddress);
-  console.log('Encoded address:', encodedAddress);
+  
+  console.log('Address processing:', {
+    original: address,
+    wasEncoded: isEncoded,
+    decoded: decodedAddress,
+    encoded: encodedAddress
+  });
 
   const params = {
     service: 'address',
@@ -41,7 +48,8 @@ async function callVWorldAPI(address: string, type: 'road' | 'parcel' = 'road', 
     simple: 'false',
     format: 'json',
     type: type,
-    key: VWORLD_API_KEY
+    key: VWORLD_API_KEY,
+    domain: 'vworld-web-mapper.vercel.app'  // 등록된 실제 도메인 사용
   };
 
   // URL 파라미터를 수동으로 구성
