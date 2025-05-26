@@ -152,47 +152,68 @@ export default function FileUpload({ setMarkers }: FileUploadProps) {
           } else {
             // 새로운 주소인 경우 좌표 조회
             try {
-              const apiUrl = new URL('/api/geocode', window.location.origin);
-              apiUrl.searchParams.set('address', encodeURIComponent(cleanedAddress));
+              const VWORLD_API_KEY = process.env.NEXT_PUBLIC_VWORLD_API_KEY;
+              const encodedAddress = encodeURIComponent(cleanedAddress);
               
-              console.log('Calling API:', apiUrl.toString());
-              const response = await fetch(apiUrl.toString(), {
-                method: 'GET',
-                headers: {
-                  'Accept': 'application/json',
-                },
-                cache: 'no-store'
-              });
+              const params = {
+                service: 'address',
+                request: 'getCoord',
+                version: '2.0',
+                crs: 'epsg:4326',
+                address: encodedAddress,
+                refine: 'true',
+                simple: 'false',
+                format: 'json',
+                type: 'road',
+                key: VWORLD_API_KEY,
+                domain: 'vworld-web-mapper.vercel.app'
+              };
+
+              const queryString = Object.entries(params)
+                .map(([key, value]) => `${key}=${value}`)
+                .join('&');
+
+              console.log('Calling VWorld API:', `http://api.vworld.kr/req/address?${queryString}`);
+              const response = await fetch(
+                `http://api.vworld.kr/req/address?${queryString}`,
+                {
+                  method: 'GET',
+                  headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Referer': 'https://vworld-web-mapper.vercel.app',
+                    'Origin': 'https://vworld-web-mapper.vercel.app'
+                  }
+                }
+              );
               
               if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ error: '알 수 없는 오류' }));
-                console.error('API Error:', errorData);
+                const errorText = await response.text();
+                console.error('VWorld API Error:', errorText);
                 failedList.push({
                   address: originalAddress,
-                  reason: errorData.error || '주소가 정확하지 않습니다.',
+                  reason: '주소를 찾을 수 없습니다.',
                   row: i + 2
                 });
                 continue;
               }
 
               const data = await response.json();
-              console.log('API Response:', data);
+              console.log('VWorld API Response:', data);
               
-              if (data.lat && data.lng) {
+              if (data.response.status === 'OK' && data.response.result?.point) {
+                const { x, y } = data.response.result.point;
                 addressMap.set(cleanedAddress, {
-                  lat: data.lat,
-                  lng: data.lng,
+                  lat: parseFloat(y),
+                  lng: parseFloat(x),
                   originalAddress: originalAddress,
                   count: 1,
-                  dong: data.dong,
-                  apartment: data.apartment,
-                  buildingNumber: data.buildingNumber,
                   addresses: [originalAddress]
                 });
               } else {
                 failedList.push({
                   address: originalAddress,
-                  reason: data.error || '주소가 정확하지 않습니다.',
+                  reason: data.response.error?.message || '주소를 찾을 수 없습니다.',
                   row: i + 2
                 });
               }
