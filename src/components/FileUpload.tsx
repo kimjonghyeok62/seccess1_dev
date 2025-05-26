@@ -154,23 +154,24 @@ export default function FileUpload({ setMarkers }: FileUploadProps) {
             try {
               const encodedAddress = encodeURIComponent(cleanedAddress);
               
-              console.log('Calling VWorld API via proxy');
+              console.log('Calling VWorld API via proxy:', cleanedAddress);
               const response = await fetch(
                 `/api/vworld?address=${encodedAddress}`,
                 {
                   method: 'GET',
                   headers: {
-                    'Accept': 'application/json'
+                    'Accept': 'application/json',
+                    'Cache-Control': 'no-cache'
                   }
                 }
               );
               
               if (!response.ok) {
-                const errorText = await response.text();
-                console.error('VWorld API Error:', errorText);
+                const errorData = await response.json().catch(() => ({ error: '알 수 없는 오류가 발생했습니다.' }));
+                console.error('VWorld API Error:', errorData);
                 failedList.push({
                   address: originalAddress,
-                  reason: '주소를 찾을 수 없습니다.',
+                  reason: errorData.error || '주소를 찾을 수 없습니다.',
                   row: i + 2
                 });
                 continue;
@@ -178,8 +179,8 @@ export default function FileUpload({ setMarkers }: FileUploadProps) {
 
               const data = await response.json();
               console.log('VWorld API Response:', data);
-              
-              if (data.response.status === 'OK' && data.response.result?.point) {
+
+              if (data.response?.status === 'OK' && data.response.result?.point) {
                 const { x, y } = data.response.result.point;
                 addressMap.set(cleanedAddress, {
                   lat: parseFloat(y),
@@ -191,7 +192,7 @@ export default function FileUpload({ setMarkers }: FileUploadProps) {
               } else {
                 failedList.push({
                   address: originalAddress,
-                  reason: data.response.error?.message || '주소를 찾을 수 없습니다.',
+                  reason: data.response?.error?.message || '주소를 찾을 수 없습니다.',
                   row: i + 2
                 });
               }
