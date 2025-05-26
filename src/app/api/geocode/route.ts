@@ -24,29 +24,14 @@ async function callVWorldAPI(address: string, type: 'road' | 'parcel' = 'road', 
 
   const VWORLD_API_DOMAIN = 'https://api.vworld.kr/req/address';
   
-  // 주소를 올바르게 인코딩
-  const encodedAddress = encodeURIComponent(address);
+  // 주소 디코딩 후 다시 인코딩
+  const decodedAddress = decodeURIComponent(address);
+  const encodedAddress = encodeURIComponent(decodedAddress);
   console.log('Original address:', address);
+  console.log('Decoded address:', decodedAddress);
   console.log('Encoded address:', encodedAddress);
 
-  // 현재 도메인 가져오기
-  let currentDomain = '';
-  const host = headers?.get('host');
-  
-  if (process.env.VERCEL_URL) {
-    currentDomain = `https://${process.env.VERCEL_URL}`;
-  } else if (host) {
-    const protocol = host.includes('localhost') ? 'http' : 'https';
-    currentDomain = `${protocol}://${host}`;
-  } else {
-    // 현재 배포된 도메인 사용
-    currentDomain = 'https://vworld-web-mapper-cg1brcmcr-kimjonghyeoks-projects-54e2f165.vercel.app';
-  }
-
-  console.log('=== Domain Details ===');
-  console.log('Current Domain:', currentDomain);
-
-  const params = new URLSearchParams({
+  const params = {
     service: 'address',
     request: 'getCoord',
     version: '2.0',
@@ -56,18 +41,20 @@ async function callVWorldAPI(address: string, type: 'road' | 'parcel' = 'road', 
     simple: 'false',
     format: 'json',
     type: type,
-    key: VWORLD_API_KEY,
-    domain: currentDomain.replace('https://', '').replace('http://', '')
-  });
+    key: VWORLD_API_KEY
+  };
 
-  const url = `${VWORLD_API_DOMAIN}?${params.toString()}`;
+  // URL 파라미터를 수동으로 구성
+  const queryString = Object.entries(params)
+    .map(([key, value]) => `${key}=${value}`)
+    .join('&');
+
+  const url = `${VWORLD_API_DOMAIN}?${queryString}`;
 
   const requestHeaders = {
     'Accept': 'application/json',
     'Content-Type': 'application/x-www-form-urlencoded',
-    'Referer': currentDomain,
-    'User-Agent': 'VWorld-Web-Mapper/1.0',
-    'Origin': currentDomain
+    'User-Agent': 'VWorld-Web-Mapper/1.0'
   };
 
   try {
@@ -119,7 +106,6 @@ async function callVWorldAPI(address: string, type: 'road' | 'parcel' = 'road', 
   } catch (error: any) {
     console.error('VWorld API Error:', {
       message: error.message,
-      domain: currentDomain,
       url: url,
       stack: error.stack
     });
@@ -161,24 +147,53 @@ export async function GET(request: NextRequest) {
 
     // 주소 정제 함수
     const cleanAddress = (addr: string) => {
-      // 아파트 동/호수 정보 추출
-      const parts = addr.split(',').map(part => part.trim());
-      let mainAddress = parts[0];
-      let buildingInfo = parts[1];
+      try {
+        // URL 디코딩
+        const decodedAddr = decodeURIComponent(addr);
+        
+        // 아파트 동/호수 정보 추출
+        const parts = decodedAddr.split(',').map(part => part.trim());
+        let mainAddress = parts[0];
+        let buildingInfo = parts[1];
 
-      // 불필요한 공백 제거
-      mainAddress = mainAddress.replace(/\s+/g, ' ').trim();
-      // "경기" -> "경기도" 변환
-      mainAddress = mainAddress.replace(/^경기\s/, '경기도 ');
-      
-      return {
-        mainAddress,
-        buildingInfo
-      };
+        // 불필요한 공백 제거
+        mainAddress = mainAddress.replace(/\s+/g, ' ').trim();
+        // "경기" -> "경기도" 변환
+        mainAddress = mainAddress.replace(/^경기\s/, '경기도 ');
+        
+        // 주소 완전성 검사 - 도로명 또는 지번 주소 체크
+        const isRoadAddress = /로\s*\d+/.test(mainAddress) || /길\s*\d+/.test(mainAddress);
+        const isParcelAddress = /동\s*\d+[-]?\d*/.test(mainAddress);
+        const isComplete = isRoadAddress || isParcelAddress;
+
+        return {
+          mainAddress,
+          buildingInfo,
+          isComplete
+        };
+      } catch (error) {
+        console.error('Address cleaning error:', error);
+        return {
+          mainAddress: addr,
+          buildingInfo: undefined,
+          isComplete: false
+        };
+      }
     };
 
-    const { mainAddress, buildingInfo } = cleanAddress(address);
-    console.log('Cleaned address:', { mainAddress, buildingInfo });
+    const { mainAddress, buildingInfo, isComplete } = cleanAddress(address);
+    console.log('Cleaned address:', { mainAddress, buildingInfo, isComplete });
+
+    if (!isComplete) {
+      return NextResponse.json({ 
+        error: '주소가 불완전합니다.',
+        address: mainAddress,
+        message: '정확한 지번이 없습니다.',
+      }, { 
+        status: 400,
+        headers: corsHeaders
+      });
+    }
 
     // 도로명 주소로 먼저 시도
     let data = await callVWorldAPI(mainAddress, 'road', request.headers);

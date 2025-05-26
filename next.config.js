@@ -12,6 +12,14 @@ const nextConfig = {
       },
     ];
   },
+  async rewrites() {
+    return [
+      {
+        source: '/api/vworld/:path*',
+        destination: 'https://api.vworld.kr/:path*',
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig; 
