@@ -152,37 +152,15 @@ export default function FileUpload({ setMarkers }: FileUploadProps) {
           } else {
             // 새로운 주소인 경우 좌표 조회
             try {
-              const VWORLD_API_KEY = process.env.NEXT_PUBLIC_VWORLD_API_KEY;
               const encodedAddress = encodeURIComponent(cleanedAddress);
               
-              const params = {
-                service: 'address',
-                request: 'getCoord',
-                version: '2.0',
-                crs: 'epsg:4326',
-                address: encodedAddress,
-                refine: 'true',
-                simple: 'false',
-                format: 'json',
-                type: 'road',
-                key: VWORLD_API_KEY,
-                domain: 'vworld-web-mapper.vercel.app'
-              };
-
-              const queryString = Object.entries(params)
-                .map(([key, value]) => `${key}=${value}`)
-                .join('&');
-
-              console.log('Calling VWorld API:', `http://api.vworld.kr/req/address?${queryString}`);
+              console.log('Calling VWorld API via proxy');
               const response = await fetch(
-                `http://api.vworld.kr/req/address?${queryString}`,
+                `/api/vworld?address=${encodedAddress}`,
                 {
                   method: 'GET',
                   headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'Referer': 'https://vworld-web-mapper.vercel.app',
-                    'Origin': 'https://vworld-web-mapper.vercel.app'
+                    'Accept': 'application/json'
                   }
                 }
               );
