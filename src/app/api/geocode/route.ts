@@ -54,7 +54,9 @@ async function callVWorldAPI(address: string, type: 'road' | 'parcel' = 'road', 
   const requestHeaders = {
     'Accept': 'application/json',
     'Content-Type': 'application/x-www-form-urlencoded',
-    'User-Agent': 'VWorld-Web-Mapper/1.0'
+    'User-Agent': 'VWorld-Web-Mapper/1.0',
+    'Referer': 'https://vworld-web-mapper.vercel.app',
+    'Origin': 'https://vworld-web-mapper.vercel.app'
   };
 
   try {
@@ -158,37 +160,59 @@ export async function GET(request: NextRequest) {
 
         // 불필요한 공백 제거
         mainAddress = mainAddress.replace(/\s+/g, ' ').trim();
+        
         // "경기" -> "경기도" 변환
         mainAddress = mainAddress.replace(/^경기\s/, '경기도 ');
         
-        // 주소 완전성 검사 - 도로명 또는 지번 주소 체크
-        const isRoadAddress = /로\s*\d+/.test(mainAddress) || /길\s*\d+/.test(mainAddress);
-        const isParcelAddress = /동\s*\d+[-]?\d*/.test(mainAddress);
-        const isComplete = isRoadAddress || isParcelAddress;
+        // 주소 완전성 검사
+        const hasProvince = /(경기도|서울시|강원도|충청도|전라도|경상도|제주도)/.test(mainAddress);
+        const hasCity = /(시|군|구)/.test(mainAddress);
+        const hasDistrict = /(동|읍|면)/.test(mainAddress);
+        
+        // 도로명 주소 체크
+        const isRoadAddress = /(로|길)\s*\d+/.test(mainAddress);
+        
+        // 지번 주소 체크 (동 다음에 숫자가 오는 경우)
+        const isParcelAddress = /동\s+\d+[-]?\d*/.test(mainAddress);
+        
+        // 상세주소 정보 추출 (아파트 동, 호수 등)
+        const buildingMatch = buildingInfo?.match(/(\d+)동\s*(\d+)호/);
+        const buildingNumber = buildingMatch ? buildingMatch[1] : undefined;
+        const unitNumber = buildingMatch ? buildingMatch[2] : undefined;
+
+        const isComplete = hasProvince && hasCity && (isRoadAddress || isParcelAddress);
 
         return {
           mainAddress,
           buildingInfo,
-          isComplete
+          buildingNumber,
+          unitNumber,
+          isComplete,
+          isRoadAddress,
+          isParcelAddress
         };
       } catch (error) {
         console.error('Address cleaning error:', error);
         return {
           mainAddress: addr,
           buildingInfo: undefined,
-          isComplete: false
+          buildingNumber: undefined,
+          unitNumber: undefined,
+          isComplete: false,
+          isRoadAddress: false,
+          isParcelAddress: false
         };
       }
     };
 
-    const { mainAddress, buildingInfo, isComplete } = cleanAddress(address);
-    console.log('Cleaned address:', { mainAddress, buildingInfo, isComplete });
+    const { mainAddress, buildingInfo, buildingNumber, isComplete, isRoadAddress } = cleanAddress(address);
+    console.log('Cleaned address:', { mainAddress, buildingInfo, buildingNumber, isComplete, isRoadAddress });
 
     if (!isComplete) {
       return NextResponse.json({ 
         error: '주소가 불완전합니다.',
         address: mainAddress,
-        message: '정확한 지번이 없습니다.',
+        message: '정확한 주소 형식이 아닙니다. 도로명 주소 또는 지번 주소를 입력해주세요.',
       }, { 
         status: 400,
         headers: corsHeaders
@@ -196,20 +220,18 @@ export async function GET(request: NextRequest) {
     }
 
     // 도로명 주소로 먼저 시도
-    let data = await callVWorldAPI(mainAddress, 'road', request.headers);
+    let data = await callVWorldAPI(mainAddress, isRoadAddress ? 'road' : 'parcel', request.headers);
     
-    // 도로명 주소 실패시 지번 주소로 시도
-    if (!data) {
-      console.log('Road address failed, trying parcel address');
+    // 도로명 주소로 실패하면 지번 주소로 시도
+    if (!data && isRoadAddress) {
       data = await callVWorldAPI(mainAddress, 'parcel', request.headers);
     }
-    
-    if (!data || !data.response || !data.response.result) {
-      console.log('Address not found:', mainAddress);
+
+    if (!data || !data.response || data.response.status === 'NOT_FOUND') {
+      console.log('Address not found:', address);
       return NextResponse.json({ 
         error: '주소를 찾을 수 없습니다.',
         address: mainAddress,
-        message: '주소를 좌표로 변환하는데 실패했습니다. 주소 형식을 확인해주세요.'
       }, { 
         status: 404,
         headers: corsHeaders
@@ -227,11 +249,8 @@ export async function GET(request: NextRequest) {
     }
 
     // 아파트 동/호수 정보가 있으면 추가
-    if (buildingInfo) {
-      const match = buildingInfo.match(/(\d+)동\s*(\d+)호/);
-      if (match) {
-        result.buildingNumber = match[1] + '동';
-      }
+    if (buildingNumber) {
+      result.buildingNumber = buildingNumber + '동';
     }
 
     console.log('Returning result:', result);
