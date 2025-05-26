@@ -22,7 +22,7 @@ async function callVWorldAPI(address: string, type: 'road' | 'parcel' = 'road', 
     return null;
   }
 
-  const VWORLD_API_DOMAIN = 'https://api.vworld.kr/req/address';
+  const VWORLD_API_DOMAIN = 'http://api.vworld.kr/req/address';
   
   // 주소 디코딩 후 다시 인코딩
   const decodedAddress = decodeURIComponent(address);
@@ -73,10 +73,18 @@ async function callVWorldAPI(address: string, type: 'road' | 'parcel' = 'road', 
     const responseText = await response.text();
     console.log('=== VWorld API Response ===');
     console.log('Status:', response.status);
+    console.log('Status Text:', response.statusText);
     console.log('Headers:', Object.fromEntries(response.headers.entries()));
     console.log('Body:', responseText);
 
     if (!response.ok) {
+      console.error('API Error Details:', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
+        body: responseText,
+        url: url
+      });
       throw new Error(`API request failed with status ${response.status}: ${responseText}`);
     }
 
