@@ -1,5 +1,6 @@
 'use client';
 
+import React, { forwardRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, CircleMarker, Tooltip } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -51,7 +52,7 @@ const MapController = ({ markers }: MapComponentProps) => {
   return null;
 };
 
-const MapComponent = ({ markers }: MapComponentProps) => {
+const MapComponent = forwardRef<L.Map, MapComponentProps>(({ markers }, ref) => {
   const [mapType, setMapType] = useState<'base' | 'satellite' | 'hybrid'>('base');
 
   // 마커 크기 계산
@@ -107,6 +108,7 @@ const MapComponent = ({ markers }: MapComponentProps) => {
         style={{ height: '100%', width: '100%' }}
         maxZoom={19}
         minZoom={7}
+        ref={ref}
       >
         <MapController markers={markers} />
         <TileLayer
@@ -190,6 +192,8 @@ const MapComponent = ({ markers }: MapComponentProps) => {
       </div>
     </div>
   );
-};
+});
+
+MapComponent.displayName = 'MapComponent';
 
 export default MapComponent; 

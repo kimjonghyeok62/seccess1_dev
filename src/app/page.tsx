@@ -80,14 +80,34 @@ export default function Home() {
 
   return (
     <div className="relative h-screen">
-      <div className="absolute top-4 left-4 z-[9999] bg-white/95 backdrop-blur-sm px-6 py-3 rounded-lg shadow-xl border border-gray-200 flex items-center gap-6">
-        <h1 className="text-xl font-bold whitespace-nowrap">주소 지도 시각화</h1>
-        <div className="flex items-center gap-4">
+      <div className="absolute top-4 left-4 z-[9999] bg-white/95 backdrop-blur-sm px-6 py-3 rounded-lg shadow-xl border border-gray-200">
+        <h1 className="text-xl font-bold whitespace-nowrap mb-4">주소 지도 시각화</h1>
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+              placeholder="주소를 입력하세요"
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-80"
+            />
+            <button
+              onClick={handleSearch}
+              disabled={isLoading}
+              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-400"
+            >
+              {isLoading ? '검색 중...' : '검색'}
+            </button>
+          </div>
+          {error && (
+            <div className="text-red-500 text-sm">{error}</div>
+          )}
           <FileUpload setMarkers={setMarkers} />
         </div>
       </div>
       <div className="h-full w-full">
-        <MapComponent markers={markers} />
+        <MapComponent markers={markers} ref={mapRef} />
       </div>
     </div>
   );
