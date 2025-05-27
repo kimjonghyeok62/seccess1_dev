@@ -22,53 +22,27 @@ export default function Home() {
     if (!address) return;
 
     setIsLoading(true);
+    setError(null);
+    
     try {
-      const VWORLD_API_KEY = process.env.NEXT_PUBLIC_VWORLD_API_KEY;
       const encodedAddress = encodeURIComponent(address);
-      
-      const params = {
-        service: 'address',
-        request: 'getCoord',
-        version: '2.0',
-        crs: 'epsg:4326',
-        address: encodedAddress,
-        refine: 'true',
-        simple: 'false',
-        format: 'json',
-        type: 'road',
-        key: VWORLD_API_KEY
-      };
-
-      const queryString = Object.entries(params)
-        .map(([key, value]) => `${key}=${value}`)
-        .join('&');
-
-      const response = await fetch(
-        `http://api.vworld.kr/req/address?${queryString}`,
-        {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Access-Control-Allow-Origin': '*'
-          }
+      const response = await fetch(`/api/geocode?address=${encodedAddress}`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json'
         }
-      );
+      });
 
       if (!response.ok) {
-        throw new Error(`API request failed with status ${response.status}`);
+        const errorData = await response.json();
+        throw new Error(errorData.error || '주소를 찾을 수 없습니다.');
       }
 
       const data = await response.json();
+      setResult({ lat: data.lat, lng: data.lng });
       
-      if (data.response.status === 'OK') {
-        const { x, y } = data.response.result.point;
-        setResult({ lat: parseFloat(y), lng: parseFloat(x) });
-        if (mapRef.current) {
-          mapRef.current.setView([parseFloat(y), parseFloat(x)], 17);
-        }
-      } else {
-        throw new Error(data.response.error?.message || '주소를 찾을 수 없습니다.');
+      if (mapRef.current) {
+        mapRef.current.setView([data.lat, data.lng], 17);
       }
     } catch (error) {
       console.error('Search error:', error);
