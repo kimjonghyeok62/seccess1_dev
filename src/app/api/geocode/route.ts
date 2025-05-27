@@ -10,7 +10,7 @@ interface GeocodingResult {
 
 // VWorld API 호출 함수
 async function callVWorldAPI(address: string, type: 'road' | 'parcel' = 'road', headers?: Headers): Promise<any> {
-  const VWORLD_API_KEY = "21E28EA8-73D0-340C-9EA2-B0CDCA0809B5";
+  const VWORLD_API_KEY = process.env.NEXT_PUBLIC_VWORLD_API_KEY;
   
   if (!VWORLD_API_KEY) {
     console.error('VWORLD_API_KEY is not set');
