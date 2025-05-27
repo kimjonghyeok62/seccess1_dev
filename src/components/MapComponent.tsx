@@ -25,7 +25,7 @@ export interface Marker {
   isApartment?: boolean;
 }
 
-interface MapComponentProps {
+export interface MapComponentProps {
   markers: Marker[];
 }
 
