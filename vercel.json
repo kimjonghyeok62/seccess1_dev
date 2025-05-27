@@ -7,6 +7,6 @@
     }
   ],
   "env": {
-    "VWORLD_API_KEY": "@vworld_api_key"
+    "NEXT_PUBLIC_VWORLD_API_KEY": "21E28EA8-73D0-340C-9EA2-B0CDCA0809B5"
   }
 } 
