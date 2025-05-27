@@ -20,9 +20,6 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const tryFetch = async (type: 'road' | 'parcel') => {
-    const encodedAddress = encodeURIComponent(address);
-    const url = `https://api.vworld.kr/req/address?service=address&request=getcoord&format=json&type=${type}&address=${encodedAddress}&key=${VWORLD_API_KEY}`;
     const response = await fetch(url);
     const contentType = response.headers.get('content-type') || '';
     const text = await response.text();
@@ -30,39 +27,14 @@ export async function GET(request: NextRequest) {
     if (!response.ok || !contentType.includes('application/json')) {
       console.error(`❗ 응답 오류(${type}):`, text);
       return null;
-    }
-
-    const data = JSON.parse(text);
-    if (data?.response?.status === 'NOT_FOUND') return null;
-
-    // 좌표 추출
-    const point = data?.response?.result?.point;
-    if (!point) return null;
-
-    return {
-      lat: parseFloat(point.y),
-      lng: parseFloat(point.x)
-    };
-  };
-
-  try {
-    let result = await tryFetch('road');
-    if (!result) {
-      result = await tryFetch('parcel');
-    }
-
-    if (!result) {
-      return new Response(
-        JSON.stringify({ error: '주소를 찾을 수 없습니다.' }),
         { status: 404, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
-    return new Response(JSON.stringify(result), {
       headers: { 'Content-Type': 'application/json' },
     });
+
   } catch (error: any) {
-    console.error('❗ 처리 중 예외 발생:', error);
     return new Response(
       JSON.stringify({ error: 'Internal Server Error', detail: error.message }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
