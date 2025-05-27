@@ -1,54 +1,34 @@
-import { NextRequest, NextResponse } from 'next/server';
+// /app/api/vworld/route.ts
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const address = searchParams.get("address");
 
-export async function GET(request: NextRequest) {
+  const VWORLD_API_KEY = process.env.VWORLD_API_KEY;
+
+  if (!VWORLD_API_KEY) {
+    console.error("VWORLD_API_KEY is not set");
+    return new Response("API key not set", { status: 500 });
+  }
+
+  const encodedAddress = encodeURIComponent(address || "");
+  const url = `https://api.vworld.kr/req/address?service=address&request=getcoord&format=json&type=road&address=${encodedAddress}&key=${VWORLD_API_KEY}`;
+
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const address = searchParams.get('address');
-    
-    if (!address) {
-      return NextResponse.json({ error: 'Address is required' }, { status: 400 });
+    const response = await fetch(url);
+    const contentType = response.headers.get("content-type");
+
+    if (!contentType?.includes("application/json")) {
+      const text = await response.text();  // 오류 응답 확인
+      console.error("Unexpected response:", text);
+      return new Response("Invalid API response", { status: 500 });
     }
 
-    const VWORLD_API_KEY = process.env.NEXT_PUBLIC_VWORLD_API_KEY;
-    
-    const params = {
-      service: 'address',
-      request: 'getCoord',
-      version: '2.0',
-      crs: 'epsg:4326',
-      address: address,
-      refine: 'true',
-      simple: 'false',
-      format: 'json',
-      type: 'road',
-      key: VWORLD_API_KEY,
-      domain: request.headers.get('host') || ''
-    };
-
-    const queryString = Object.entries(params)
-      .map(([key, value]) => `${key}=${value}`)
-      .join('&');
-
-    const response = await fetch(
-      `http://api.vworld.kr/req/address?${queryString}`,
-      {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Referer': request.headers.get('origin') || '',
-          'Origin': request.headers.get('origin') || ''
-        }
-      }
-    );
-
     const data = await response.json();
-    return NextResponse.json(data);
+    return new Response(JSON.stringify(data), {
+      headers: { "Content-Type": "application/json" },
+    });
   } catch (error) {
-    console.error('VWorld API Error:', error);
-    return NextResponse.json(
-      { error: 'Failed to process the request' },
-      { status: 500 }
-    );
+    console.error("Fetch error:", error);
+    return new Response("API call failed", { status: 500 });
   }
-} 
+}
