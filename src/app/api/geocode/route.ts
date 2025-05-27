@@ -37,7 +37,7 @@ async function callVWorldAPI(address: string, type: 'road' | 'parcel' = 'road', 
     format: 'json',
     type: type,
     key: VWORLD_API_KEY,
-    domain: headers?.get('host') || 'localhost:3000'
+    domain: 'vworld-web-mapper-6nklr1gdd-kimjonghyeoks-projects-54e2f165.vercel.app'
   };
 
   // URL 파라미터를 수동으로 구성
