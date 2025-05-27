@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.custom-tooltip {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: #000;
+  font-weight: bold;
+  font-size: 12px;
+  text-align: center;
+}
+
+.custom-tooltip::before {
+  display: none;
+}
+
+.leaflet-popup-content {
+  margin: 0;
+  padding: 0;
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: 8px;
+  padding: 0;
+}
+
+.leaflet-container {
+  font: inherit;
+} 
