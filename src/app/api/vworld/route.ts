@@ -12,7 +12,6 @@ export async function GET(request: NextRequest) {
   }
 
   const VWORLD_API_KEY = process.env.VWORLD_API_KEY;
-
   if (!VWORLD_API_KEY) {
     console.error('❗ VWORLD_API_KEY 환경변수가 설정되지 않았습니다.');
     return new Response(
@@ -21,40 +20,49 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // ✅ 주소 유형 자동 판단: "동"이 포함되면 지번으로 간주
-  const addressType = /[가-힣]+\s*동|\d+번지/.test(address) ? 'parcel' : 'road';
-
-  const encodedAddress = encodeURIComponent(address);
-  const url = `https://api.vworld.kr/req/address?service=address&request=getcoord&format=json&type=${addressType}&address=${encodedAddress}&key=${VWORLD_API_KEY}`;
-
-  try {
+  const tryFetch = async (type: 'road' | 'parcel') => {
+    const encodedAddress = encodeURIComponent(address);
+    const url = `https://api.vworld.kr/req/address?service=address&request=getcoord&format=json&type=${type}&address=${encodedAddress}&key=${VWORLD_API_KEY}`;
     const response = await fetch(url);
     const contentType = response.headers.get('content-type') || '';
+    const text = await response.text();
 
-    if (!response.ok) {
-      const text = await response.text();
-      console.error('❗ API 호출 실패:', text);
+    if (!response.ok || !contentType.includes('application/json')) {
+      console.error(`❗ 응답 오류(${type}):`, text);
+      return null;
+    }
+
+    const data = JSON.parse(text);
+    if (data?.response?.status === 'NOT_FOUND') return null;
+
+    // 좌표 추출
+    const point = data?.response?.result?.point;
+    if (!point) return null;
+
+    return {
+      lat: parseFloat(point.y),
+      lng: parseFloat(point.x)
+    };
+  };
+
+  try {
+    let result = await tryFetch('road');
+    if (!result) {
+      result = await tryFetch('parcel');
+    }
+
+    if (!result) {
       return new Response(
-        JSON.stringify({ error: 'Failed to fetch from VWorld API' }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: '주소를 찾을 수 없습니다.' }),
+        { status: 404, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
-    if (!contentType.includes('application/json')) {
-      const text = await response.text();
-      console.error('❗ JSON 이외 응답:', text);
-      return new Response(
-        JSON.stringify({ error: 'Unexpected response format from VWorld API' }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const data = await response.json();
-    return new Response(JSON.stringify(data), {
+    return new Response(JSON.stringify(result), {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (error: any) {
-    console.error('❗ VWorld API 처리 중 예외:', error);
+    console.error('❗ 처리 중 예외 발생:', error);
     return new Response(
       JSON.stringify({ error: 'Internal Server Error', detail: error.message }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
