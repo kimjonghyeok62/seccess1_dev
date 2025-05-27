@@ -5,6 +5,7 @@ const nextConfig = {
   experimental: {
     optimizeCss: true,
   },
+  output: 'standalone',
   webpack: (config) => {
     config.watchOptions = {
       poll: 1000,
