@@ -37,7 +37,7 @@ async function callVWorldAPI(address: string, type: 'road' | 'parcel' = 'road', 
     format: 'json',
     type: type,
     key: VWORLD_API_KEY,
-    domain: 'vworld-web-mapper-6nklr1gdd-kimjonghyeoks-projects-54e2f165.vercel.app'
+    domain: process.env.VERCEL_URL || 'localhost:3000'
   };
 
   // URL 파라미터를 수동으로 구성
@@ -54,8 +54,8 @@ async function callVWorldAPI(address: string, type: 'road' | 'parcel' = 'road', 
         'Accept': 'application/json',
         'Content-Type': 'application/x-www-form-urlencoded',
         'User-Agent': 'VWorld-Web-Mapper/1.0',
-        'Referer': headers?.get('origin') || 'http://localhost:3000',
-        'Origin': headers?.get('origin') || 'http://localhost:3000'
+        'Referer': 'https://vworld-web-mapper-5b7l4k69z-kimjonghyeoks-projects-54e2f165.vercel.app',
+        'Origin': 'https://vworld-web-mapper-5b7l4k69z-kimjonghyeoks-projects-54e2f165.vercel.app'
       },
       cache: 'no-store'
     });
@@ -86,12 +86,21 @@ async function callVWorldAPI(address: string, type: 'road' | 'parcel' = 'road', 
 }
 
 export async function GET(request: NextRequest) {
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+  };
+
   try {
     const address = request.nextUrl.searchParams.get('address');
     if (!address) {
       return NextResponse.json(
         { error: '주소가 필요합니다.' },
-        { status: 400 }
+        { 
+          status: 400,
+          headers: corsHeaders
+        }
       );
     }
 
@@ -180,12 +189,17 @@ export async function GET(request: NextRequest) {
       result.buildingNumber = buildingNumber + '동';
     }
 
-    return NextResponse.json(result);
+    return NextResponse.json(result, {
+      headers: corsHeaders
+    });
   } catch (error: any) {
     console.error('Geocoding error:', error);
     return NextResponse.json({ 
       error: '서버 오류가 발생했습니다.',
       message: error.message || '알 수 없는 오류가 발생했습니다.'
-    }, { status: 500 });
+    }, { 
+      status: 500,
+      headers: corsHeaders
+    });
   }
 }
