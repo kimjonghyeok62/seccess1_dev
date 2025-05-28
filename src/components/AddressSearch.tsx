@@ -47,6 +47,7 @@ const AddressSearch: React.FC<AddressSearchProps> = ({ onAddressFound, onError }
 
       const startTime = performance.now();
       const response = await fetch(requestUrl, {
+        method: 'GET',
         headers: {
           'Accept': 'application/json',
           'Cache-Control': 'no-cache'
@@ -72,6 +73,10 @@ const AddressSearch: React.FC<AddressSearchProps> = ({ onAddressFound, onError }
 
       if (!response.ok) {
         throw new Error(data.error || '주소를 찾을 수 없습니다.');
+      }
+
+      if (data.error) {
+        throw new Error(data.error);
       }
 
       onAddressFound({
@@ -114,6 +119,7 @@ const AddressSearch: React.FC<AddressSearchProps> = ({ onAddressFound, onError }
     const value = e.target.value;
     setAddress(value);
     setError(null);
+    setDebugInfo(null);
   };
 
   return (

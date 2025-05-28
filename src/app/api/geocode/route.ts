@@ -23,30 +23,22 @@ async function searchAddress(address: string): Promise<any> {
   // 주소 정제 과정 로깅
   console.log('\n--- 주소 정제 과정 ---');
   const cleanAddress = address
-    .split(',')[0];
-  console.log('1. 콤마 제거 후:', cleanAddress);
-
-  const withoutSpaces = cleanAddress.replace(/\s+/g, ' ');
-  console.log('2. 공백 정리 후:', withoutSpaces);
-
-  const withProperPrefix = withoutSpaces.replace(/^경기\s/, '경기도 ');
-  console.log('3. 접두사 수정 후:', withProperPrefix);
-
-  const withoutHo = withProperPrefix.replace(/\s*\d+호\s*$/, '');
-  console.log('4. 호수 제거 후:', withoutHo);
-
-  const finalAddress = withoutHo
+    .split(',')[0]
+    .replace(/\s+/g, ' ')
+    .replace(/^경기\s/, '경기도 ')
+    .replace(/\s*\d+호\s*$/, '')
     .replace(/\s*(아파트|APT|상가|빌딩|오피스텔)\s*$/, '')
     .trim();
-  console.log('5. 최종 정제된 주소:', finalAddress);
 
-  // API 요청 파라미터 구성
+  console.log('정제된 주소:', cleanAddress);
+
+  // API 요청 URL 구성
   const params = new URLSearchParams({
     service: 'address',
     request: 'getcoord',
     version: '2.0',
     crs: 'EPSG:4326',
-    address: finalAddress,
+    address: cleanAddress,
     refine: 'true',
     simple: 'false',
     format: 'json',
@@ -55,30 +47,21 @@ async function searchAddress(address: string): Promise<any> {
     domain: VWORLD_API_DOMAIN
   });
 
-  console.log('\n--- API 요청 정보 ---');
-  console.log('요청 파라미터:', Object.fromEntries(params.entries()));
-
   try {
-    const apiUrl = `https://api.vworld.kr/req/address?${params.toString()}`;
-    console.log('요청 URL:', apiUrl);
-    console.log('요청 헤더:');
-    const headers = {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-      'User-Agent': 'VWorld Web Mapper',
-      'Cache-Control': 'no-cache',
-      'Referer': `https://${VWORLD_API_DOMAIN}`
-    };
-    console.log(headers);
+    const apiUrl = `/api/v/address?${params.toString()}`;
+    console.log('API 요청 URL:', apiUrl);
 
     const response = await fetch(apiUrl, {
       method: 'GET',
-      headers: headers
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'User-Agent': 'VWorld Web Mapper',
+        'Cache-Control': 'no-cache',
+        'Referer': `https://${VWORLD_API_DOMAIN}`
+      },
+      next: { revalidate: 0 }
     });
-
-    console.log('\n--- API 응답 정보 ---');
-    console.log('응답 상태:', response.status, response.statusText);
-    console.log('응답 헤더:', Object.fromEntries(response.headers.entries()));
 
     const responseText = await response.text();
     console.log('원본 응답 데이터:', responseText);
@@ -113,21 +96,16 @@ async function searchAddress(address: string): Promise<any> {
     }
 
     const result = data.response.result[0];
-    console.log('\n--- 최종 처리 결과 ---');
-    console.log('검색 성공:', {
+    const response_data = {
       lat: parseFloat(result.point.y),
       lng: parseFloat(result.point.x),
-      address: finalAddress,
-      type: 'road'
-    });
-
-    return {
-      lat: parseFloat(result.point.y),
-      lng: parseFloat(result.point.x),
-      address: finalAddress,
+      address: cleanAddress,
       type: 'road',
       original: address
     };
+
+    console.log('최종 응답 데이터:', response_data);
+    return response_data;
 
   } catch (error: any) {
     console.error('\n=== 오류 발생 ===');
@@ -156,7 +134,6 @@ export async function GET(request: NextRequest) {
     }
 
     const result = await searchAddress(address);
-    console.log('최종 응답:', result);
     return NextResponse.json(result);
 
   } catch (error: any) {
