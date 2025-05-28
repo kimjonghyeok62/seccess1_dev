@@ -16,6 +16,18 @@ const nextConfig = {
     };
     return config;
   },
+  async rewrites() {
+    return [
+      {
+        source: '/api/wmts/:path*',
+        destination: 'https://api.vworld.kr/req/wmts/:path*'
+      },
+      {
+        source: '/api/address/:path*',
+        destination: 'https://api.vworld.kr/req/address/:path*'
+      }
+    ];
+  },
   async headers() {
     return [
       {
@@ -40,21 +52,9 @@ const nextConfig = {
           {
             key: 'Strict-Transport-Security',
             value: 'max-age=31536000; includeSubDomains',
-          },
+          }
         ],
       },
-    ];
-  },
-  async rewrites() {
-    return [
-      {
-        source: '/api/wmts/:version/:key/:layer/:tileMatrix/:tileRow/:tileCol:tileType',
-        destination: 'https://api.vworld.kr/req/wmts/:version/:key/:layer/:tileMatrix/:tileRow/:tileCol:tileType'
-      },
-      {
-        source: '/api/address',
-        destination: 'https://api.vworld.kr/req/address'
-      }
     ];
   },
 };

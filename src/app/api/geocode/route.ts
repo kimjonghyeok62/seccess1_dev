@@ -33,25 +33,23 @@ async function searchAddress(address: string): Promise<any> {
   console.log('정제된 주소:', cleanAddress);
 
   try {
-    // API 요청 URL 및 파라미터 구성
-    const params = new URLSearchParams({
-      service: 'address',
-      request: 'getcoord',
-      version: '2.0',
-      crs: 'EPSG:4326',
-      address: cleanAddress,
-      refine: 'true',
-      simple: 'false',
-      format: 'json',
-      type: 'road',
-      key: VWORLD_API_KEY,
-      domain: VWORLD_API_DOMAIN
-    });
+    // API 직접 호출
+    const apiUrl = new URL('https://api.vworld.kr/req/address');
+    apiUrl.searchParams.append('service', 'address');
+    apiUrl.searchParams.append('request', 'getcoord');
+    apiUrl.searchParams.append('version', '2.0');
+    apiUrl.searchParams.append('crs', 'EPSG:4326');
+    apiUrl.searchParams.append('address', cleanAddress);
+    apiUrl.searchParams.append('refine', 'true');
+    apiUrl.searchParams.append('simple', 'false');
+    apiUrl.searchParams.append('format', 'json');
+    apiUrl.searchParams.append('type', 'road');
+    apiUrl.searchParams.append('key', VWORLD_API_KEY);
+    apiUrl.searchParams.append('domain', VWORLD_API_DOMAIN);
 
-    const apiUrl = `/api/address?${params.toString()}`;
-    console.log('API 요청 URL:', apiUrl);
+    console.log('API 요청 URL:', apiUrl.toString());
 
-    const response = await fetch(apiUrl, {
+    const response = await fetch(apiUrl.toString(), {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
