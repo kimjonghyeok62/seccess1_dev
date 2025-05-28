@@ -33,36 +33,33 @@ const MapComponent = forwardRef<any, MapComponentProps>(({ markers }, ref) => {
   const initializeMap = () => {
     if (!window.vw || mapRef.current) return;
 
-    const options = {
-      map: {
-        basemapType: window.vw.ol3.BasemapType.GRAPHIC,
-        controlDensity: window.vw.ol3.DensityType.EMPTY,
-        interactionDensity: window.vw.ol3.DensityType.BASIC,
-        controlsAutoArrange: true,
-        homePosition: window.vw.ol3.CameraPosition,
-        initPosition: window.vw.ol3.CameraPosition,
-      },
-      container: mapContainerId
-    };
-
     try {
-      const vmap = new window.vw.Map(options);
-      mapRef.current = vmap;
+      const vw = window.vw;
+      const options = {
+        container: mapContainerId,
+        mapMode: "2d-map",
+        basemapType: vw.BasemapType.GRAPHIC,
+        controlDensity: vw.DensityType.EMPTY,
+        interactionDensity: vw.DensityType.BASIC,
+        controlsAutoArrange: true,
+        homePosition: vw.CameraPosition,
+        initPosition: vw.CameraPosition,
+      };
+
+      const mapController = new vw.MapController(options);
+      mapRef.current = mapController;
       setIsMapInitialized(true);
 
       // 마커 추가
       if (markers.length > 0) {
         markers.forEach((marker) => {
           const markerSize = calculateMarkerSize(marker.count);
-          addMarker(vmap, marker, markerSize);
+          addMarker(mapController, marker, markerSize);
         });
 
         // 모든 마커가 보이도록 지도 영역 조정
         const bounds = calculateBounds(markers);
-        vmap.getView().fit(bounds, {
-          padding: [50, 50, 50, 50],
-          maxZoom: 17
-        });
+        mapController.zoomToExtent(bounds);
       }
     } catch (error) {
       console.error('지도 초기화 중 오류 발생:', error);
@@ -71,7 +68,8 @@ const MapComponent = forwardRef<any, MapComponentProps>(({ markers }, ref) => {
 
   useEffect(() => {
     const script = document.createElement('script');
-    script.src = `https://map.vworld.kr/js/apis.do?type=Base&apiKey=${VWORLD_KEY}`;
+    const domain = typeof window !== 'undefined' ? window.location.hostname : '';
+    script.src = `http://map.vworld.kr/js/vworldMapInit.js.do?version=2.0&apiKey=${VWORLD_KEY}&domain=${domain}`;
     script.async = true;
     script.onload = () => {
       initializeMap();
@@ -79,7 +77,9 @@ const MapComponent = forwardRef<any, MapComponentProps>(({ markers }, ref) => {
     document.head.appendChild(script);
 
     return () => {
-      document.head.removeChild(script);
+      if (script.parentNode) {
+        script.parentNode.removeChild(script);
+      }
       if (mapRef.current) {
         mapRef.current = null;
       }
@@ -99,10 +99,7 @@ const MapComponent = forwardRef<any, MapComponentProps>(({ markers }, ref) => {
 
       // 지도 영역 조정
       const bounds = calculateBounds(markers);
-      mapRef.current.getView().fit(bounds, {
-        padding: [50, 50, 50, 50],
-        maxZoom: 17
-      });
+      mapRef.current.zoomToExtent(bounds);
     }
   }, [markers, isMapInitialized]);
 
@@ -130,11 +127,12 @@ const MapComponent = forwardRef<any, MapComponentProps>(({ markers }, ref) => {
     return [minLng, minLat, maxLng, maxLat];
   };
 
-  const addMarker = (map: any, marker: Marker, size: number) => {
+  const addMarker = (mapController: any, marker: Marker, size: number) => {
     try {
       const markerOptions = {
-        map: map,
+        map: mapController,
         position: [marker.lng, marker.lat],
+        title: marker.address,
         icon: {
           size: [size * 2, size * 2],
           anchor: [size, size],
@@ -159,7 +157,7 @@ const MapComponent = forwardRef<any, MapComponentProps>(({ markers }, ref) => {
         }
       };
 
-      const markerInstance = new window.vw.ol3.Marker(markerOptions);
+      const markerInstance = new window.vw.Marker(markerOptions);
       
       // 팝업 설정
       markerInstance.on('click', () => {
@@ -175,13 +173,13 @@ const MapComponent = forwardRef<any, MapComponentProps>(({ markers }, ref) => {
           </div>
         `;
 
-        const popup = new window.vw.ol3.Popup();
+        const popup = new window.vw.Popup();
         popup.setContent(content);
         popup.setPosition(markerOptions.position);
-        map.addPopup(popup);
+        mapController.addPopup(popup);
       });
 
-      map.addMarker(markerInstance);
+      mapController.addMarker(markerInstance);
     } catch (error) {
       console.error('마커 추가 중 오류 발생:', error);
     }
@@ -193,9 +191,9 @@ const MapComponent = forwardRef<any, MapComponentProps>(({ markers }, ref) => {
     setMapType(type);
     try {
       const mapTypes = {
-        base: window.vw.ol3.BasemapType.GRAPHIC,
-        satellite: window.vw.ol3.BasemapType.SATELLITE,
-        hybrid: window.vw.ol3.BasemapType.HYBRID
+        base: window.vw.BasemapType.GRAPHIC,
+        satellite: window.vw.BasemapType.SATELLITE,
+        hybrid: window.vw.BasemapType.HYBRID
       };
       mapRef.current.setBasemapType(mapTypes[type]);
     } catch (error) {
