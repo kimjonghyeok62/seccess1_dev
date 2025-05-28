@@ -11,6 +11,7 @@ interface GeocodingResult {
 // VWorld API 호출 함수
 async function callVWorldAPI(address: string): Promise<any> {
   const VWORLD_API_KEY = process.env.NEXT_PUBLIC_VWORLD_API_KEY;
+  const domain = process.env.VERCEL_URL || 'localhost:3000';
   
   if (!VWORLD_API_KEY) {
     console.error('VWORLD_API_KEY is not set');
@@ -29,7 +30,7 @@ async function callVWorldAPI(address: string): Promise<any> {
   // URL 인코딩
   const encodedAddress = encodeURIComponent(cleanAddress);
 
-  const url = `http://api.vworld.kr/req/address?service=address&request=getCoord&version=2.0&crs=epsg:4326&address=${encodedAddress}&refine=true&simple=false&format=json&type=road&key=${VWORLD_API_KEY}`;
+  const url = `https://api.vworld.kr/req/address?service=address&request=getCoord&version=2.0&crs=epsg:4326&address=${encodedAddress}&refine=true&simple=false&format=json&type=road&key=${VWORLD_API_KEY}&domain=${domain}`;
 
   try {
     const response = await fetch(url, {
@@ -38,12 +39,15 @@ async function callVWorldAPI(address: string): Promise<any> {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
-        'User-Agent': 'VWorld-Web-Mapper/1.0'
+        'User-Agent': 'VWorld-Web-Mapper/1.0',
+        'Referer': `https://${domain}`,
+        'Origin': `https://${domain}`
       },
       cache: 'no-store'
     });
 
     if (!response.ok) {
+      console.error('API Response:', await response.text());
       throw new Error(`API 요청 실패: ${response.status}`);
     }
 
@@ -80,6 +84,12 @@ async function callVWorldAPI(address: string): Promise<any> {
 }
 
 export async function GET(request: NextRequest) {
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+  };
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const address = searchParams.get('address');
@@ -87,13 +97,18 @@ export async function GET(request: NextRequest) {
     if (!address) {
       return NextResponse.json(
         { error: '주소가 필요합니다.' },
-        { status: 400 }
+        { 
+          status: 400,
+          headers: corsHeaders
+        }
       );
     }
 
     const result = await callVWorldAPI(address);
 
-    return NextResponse.json(result);
+    return NextResponse.json(result, {
+      headers: corsHeaders
+    });
 
   } catch (error: any) {
     console.error('Error processing request:', error);
@@ -102,7 +117,10 @@ export async function GET(request: NextRequest) {
         error: error.message || '주소를 찾을 수 없습니다.',
         details: error.toString()
       },
-      { status: error.message.includes('주소를 찾을 수 없습니다.') ? 404 : 500 }
+      { 
+        status: error.message.includes('주소를 찾을 수 없습니다.') ? 404 : 500,
+        headers: corsHeaders
+      }
     );
   }
 }
