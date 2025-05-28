@@ -1,15 +1,20 @@
 'use client';
 
 import React, { forwardRef, useEffect, useRef, useState } from 'react';
-import Script from 'next/script';
+import { MapContainer, TileLayer, Marker, Popup, useMap, CircleMarker } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
 
-declare global {
-  interface Window {
-    vw: any;
-    maps: any;
-  }
-}
+// Leaflet 기본 아이콘 문제 해결
+const icon = L.icon({
+  iconUrl: '/marker-icon.png',
+  iconRetinaUrl: '/marker-icon-2x.png',
+  shadowUrl: '/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
 
 export interface Marker {
   lat: number;
@@ -24,208 +29,143 @@ export interface MapComponentProps {
   markers: Marker[];
 }
 
-const MapComponent = forwardRef<any, MapComponentProps>(({ markers }, ref) => {
-  const mapRef = useRef<any>(null);
+// 마커들의 중심점과 경계를 계산하는 컴포넌트
+const MapController = ({ markers }: { markers: Marker[] }) => {
+  const map = useMap();
+
+  useEffect(() => {
+    if (markers.length > 0) {
+      const bounds = L.latLngBounds(markers.map(marker => [marker.lat, marker.lng]));
+      map.fitBounds(bounds, {
+        padding: [50, 50],
+        maxZoom: 17
+      });
+    }
+  }, [markers, map]);
+
+  return null;
+};
+
+// 마커 컴포넌트
+const MarkerComponent = ({ marker, size }: { marker: Marker; size: number }) => {
+  return (
+    <>
+      <CircleMarker
+        center={[marker.lat, marker.lng]}
+        radius={size}
+        fillColor="#1d4ed8"
+        fillOpacity={0.6}
+        color="#1e40af"
+        weight={1}
+      >
+        <Popup>
+          <div className="p-2 max-w-xs">
+            <p className="font-bold mb-1">{marker.address}</p>
+            <p className="text-sm text-gray-600">{marker.count}건</p>
+            {marker.addresses.length > 0 && (
+              <div className="mt-2 text-xs text-gray-500 max-h-32 overflow-y-auto">
+                {marker.addresses.map((addr, i) => (
+                  <p key={i}>{addr}</p>
+                ))}
+              </div>
+            )}
+          </div>
+        </Popup>
+      </CircleMarker>
+      {marker.count >= 10 && (
+        <Marker
+          position={[marker.lat, marker.lng]}
+          icon={L.divIcon({
+            className: 'custom-div-icon',
+            html: `<div style="
+              background-color: transparent;
+              color: white;
+              font-weight: bold;
+              text-align: center;
+              width: ${size * 2}px;
+              height: ${size * 2}px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+              margin-left: -${size}px;
+              margin-top: -${size}px;
+              font-size: ${Math.max(12, Math.min(16, size * 0.5))}px;
+            ">${marker.count}</div>`,
+            iconSize: [size * 2, size * 2],
+            iconAnchor: [0, 0]
+          })}
+        >
+          <Popup>
+            <div className="p-2 max-w-xs">
+              <p className="font-bold mb-1">{marker.address}</p>
+              <p className="text-sm text-gray-600">{marker.count}건</p>
+              {marker.addresses.length > 0 && (
+                <div className="mt-2 text-xs text-gray-500 max-h-32 overflow-y-auto">
+                  {marker.addresses.map((addr, i) => (
+                    <p key={i}>{addr}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+          </Popup>
+        </Marker>
+      )}
+    </>
+  );
+};
+
+const MapComponent = forwardRef<L.Map, MapComponentProps>(({ markers }, ref) => {
   const [mapType, setMapType] = useState<'base' | 'satellite' | 'hybrid'>('base');
   const VWORLD_KEY = process.env.NEXT_PUBLIC_VWORLD_API_KEY;
-  const mapContainerId = 'vmap';
 
-  useEffect(() => {
-    // VWorld 스크립트 로드
-    const loadVWorldScript = () => {
-      return new Promise<void>((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = `https://map.vworld.kr/js/vworldMapInit.js.do?version=2.0&apiKey=${VWORLD_KEY}`;
-        script.async = true;
-        script.onload = () => resolve();
-        script.onerror = () => reject(new Error('VWorld 스크립트 로드 실패'));
-        document.head.appendChild(script);
-      });
-    };
-
-    const initializeMap = async () => {
-      try {
-        await loadVWorldScript();
-
-        const vw = window.vw;
-        if (!vw) {
-          console.error('VWorld API가 로드되지 않았습니다.');
-          return;
-        }
-
-        // 지도 옵션 설정
-        const options = {
-          container: mapContainerId,
-          mapMode: "2d-map",
-          basemapType: vw.BasemapType.GRAPHIC,
-          controlDensity: vw.DensityType.EMPTY,
-          interactionDensity: vw.DensityType.BASIC,
-          controlsAutoArrange: true,
-          homePosition: vw.CameraPosition,
-          initPosition: vw.CameraPosition
-        };
-
-        // 지도 생성
-        const map = new vw.Map(options);
-        mapRef.current = map;
-
-        // 초기 위치 설정 (대한민국 중심)
-        map.setCenter(new vw.CoordZ(127.5, 36.5, 7));
-
-        // 마커 추가
-        if (markers && markers.length > 0) {
-          markers.forEach((marker) => {
-            const size = calculateMarkerSize(marker.count);
-            addMarker(map, marker, size);
-          });
-
-          // 모든 마커가 보이도록 지도 영역 조정
-          const bounds = calculateBounds(markers);
-          if (bounds) {
-            map.setBounds(bounds);
-          }
-        }
-
-      } catch (error) {
-        console.error('지도 초기화 중 오류 발생:', error);
-      }
-    };
-
-    initializeMap();
-
-    return () => {
-      if (mapRef.current) {
-        mapRef.current.destroy();
-        mapRef.current = null;
-      }
-    };
-  }, [VWORLD_KEY]);
-
-  // 마커가 변경될 때마다 업데이트
-  useEffect(() => {
-    if (!mapRef.current || !markers) return;
-
-    const map = mapRef.current;
-
-    // 기존 마커 제거
-    map.clearMarkers();
-
-    // 새 마커 추가
-    markers.forEach((marker) => {
-      const size = calculateMarkerSize(marker.count);
-      addMarker(map, marker, size);
-    });
-
-    // 지도 영역 조정
-    const bounds = calculateBounds(markers);
-    if (bounds) {
-      map.setBounds(bounds);
+  const getMapUrl = (type: string) => {
+    const key = VWORLD_KEY;
+    const domain = typeof window !== 'undefined' ? window.location.hostname : '';
+    switch (type) {
+      case 'satellite':
+        return `https://api.vworld.kr/req/wmts/1.0.0/${key}/Satellite/{z}/{y}/{x}.jpeg?domain=${domain}`;
+      case 'hybrid':
+        return `https://api.vworld.kr/req/wmts/1.0.0/${key}/Hybrid/{z}/{y}/{x}.png?domain=${domain}`;
+      default:
+        return `https://api.vworld.kr/req/wmts/1.0.0/${key}/Base/{z}/{y}/{x}.png?domain=${domain}`;
     }
-  }, [markers]);
+  };
 
-  const calculateMarkerSize = (count: number) => {
+  // 마커 크기 계산
+  const markerSizes = markers.map(marker => {
     const k = 0.1111;
     const maxRadius = 50;
-    return Math.min(Math.sqrt(count / k), maxRadius);
-  };
-
-  const calculateBounds = (markers: Marker[]) => {
-    if (!markers || markers.length === 0) return null;
-
-    const lngs = markers.map(m => m.lng);
-    const lats = markers.map(m => m.lat);
-
-    return {
-      sw: [Math.min(...lngs), Math.min(...lats)],
-      ne: [Math.max(...lngs), Math.max(...lats)]
-    };
-  };
-
-  const addMarker = (map: any, marker: Marker, size: number) => {
-    try {
-      const markerOptions = {
-        map: map,
-        position: [marker.lng, marker.lat],
-        title: marker.address,
-        content: `
-          <div style="
-            width: ${size * 2}px;
-            height: ${size * 2}px;
-            background-color: rgba(29, 78, 216, 0.6);
-            border: 1px solid #1e40af;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
-            font-size: ${Math.max(12, Math.min(16, size * 0.5))}px;
-          ">
-            ${marker.count}
-          </div>
-        `
-      };
-
-      const markerInstance = new window.vw.Marker(markerOptions);
-
-      // 클릭 이벤트에 팝업 추가
-      markerInstance.on('click', () => {
-        const infoWindow = new window.vw.InfoWindow({
-          map: map,
-          position: [marker.lng, marker.lat],
-          content: `
-            <div class="p-2 max-w-xs">
-              <p class="font-bold mb-1">${marker.address}</p>
-              <p class="text-sm text-gray-600">${marker.count}건</p>
-              ${marker.addresses.length > 0 ? `
-                <div class="mt-2 text-xs text-gray-500 max-h-32 overflow-y-auto">
-                  ${marker.addresses.map(addr => `<p>${addr}</p>`).join('')}
-                </div>
-              ` : ''}
-            </div>
-          `
-        });
-      });
-
-    } catch (error) {
-      console.error('마커 추가 중 오류 발생:', error);
-    }
-  };
-
-  const handleMapTypeChange = (type: 'base' | 'satellite' | 'hybrid') => {
-    if (!mapRef.current) return;
-
-    setMapType(type);
-    const map = mapRef.current;
-    
-    try {
-      switch (type) {
-        case 'satellite':
-          map.setBasemapType(window.vw.BasemapType.SATELLITE);
-          break;
-        case 'hybrid':
-          map.setBasemapType(window.vw.BasemapType.HYBRID);
-          break;
-        default:
-          map.setBasemapType(window.vw.BasemapType.GRAPHIC);
-      }
-    } catch (error) {
-      console.error('지도 타입 변경 중 오류 발생:', error);
-    }
-  };
+    return Math.min(Math.sqrt(marker.count / k), maxRadius);
+  });
 
   return (
     <div className="relative h-full w-full">
-      <div 
-        id={mapContainerId} 
+      <MapContainer
+        center={[37.2911, 127.0089]}
+        zoom={11}
         style={{ height: '100%', width: '100%', minHeight: '600px' }}
+        maxZoom={19}
+        minZoom={7}
         ref={ref}
-      />
+      >
+        <MapController markers={markers} />
+        <TileLayer
+          attribution='&copy; <a href="http://www.vworld.kr">VWorld</a>'
+          url={getMapUrl(mapType)}
+        />
+        {markers.map((marker, index) => (
+          <MarkerComponent
+            key={`marker-${index}`}
+            marker={marker}
+            size={markerSizes[index]}
+          />
+        ))}
+      </MapContainer>
       <div className="absolute top-4 right-4 bg-white p-2 rounded shadow-lg z-[1000]">
         <select 
           value={mapType}
-          onChange={(e) => handleMapTypeChange(e.target.value as 'base' | 'satellite' | 'hybrid')}
+          onChange={(e) => setMapType(e.target.value as 'base' | 'satellite' | 'hybrid')}
           className="px-2 py-1 border rounded"
         >
           <option value="base">기본지도</option>
