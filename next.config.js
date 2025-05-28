@@ -54,7 +54,7 @@ const nextConfig = {
     return [
       {
         source: '/api/vworld/:path*',
-        destination: 'https://api.vworld.kr/:path*',
+        destination: 'http://api.vworld.kr/:path*',
       },
     ];
   },

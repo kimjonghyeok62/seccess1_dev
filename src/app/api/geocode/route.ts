@@ -11,21 +11,25 @@ interface GeocodingResult {
 // VWorld API 호출 함수
 async function callVWorldAPI(address: string): Promise<any> {
   const VWORLD_API_KEY = process.env.NEXT_PUBLIC_VWORLD_API_KEY;
-  const domain = process.env.VERCEL_URL || 'localhost:3000';
   
   if (!VWORLD_API_KEY) {
     console.error('VWORLD_API_KEY is not set');
-    return null;
+    throw new Error('API 키가 설정되지 않았습니다.');
   }
 
   // 주소가 이미 인코딩되어 있는지 확인하고 디코딩
-  const isEncoded = address.includes('%');
-  const decodedAddress = isEncoded ? decodeURIComponent(address) : address;
+  const decodedAddress = decodeURIComponent(address);
   
-  // 한 번만 인코딩
-  const encodedAddress = encodeURIComponent(decodedAddress);
+  // 주소 정제
+  const cleanAddress = decodedAddress
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^경기\s/, '경기도 ');
 
-  const url = `https://api.vworld.kr/req/address?service=address&request=getCoord&version=2.0&crs=epsg:4326&address=${encodedAddress}&refine=true&simple=false&format=json&type=road&key=${VWORLD_API_KEY}&domain=${domain}`;
+  // URL 인코딩
+  const encodedAddress = encodeURIComponent(cleanAddress);
+
+  const url = `http://api.vworld.kr/req/address?service=address&request=getCoord&version=2.0&crs=epsg:4326&address=${encodedAddress}&refine=true&simple=false&format=json&type=road&key=${VWORLD_API_KEY}`;
 
   try {
     const response = await fetch(url, {
@@ -34,12 +38,13 @@ async function callVWorldAPI(address: string): Promise<any> {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
-        'Referer': `https://${domain}`
-      }
+        'User-Agent': 'VWorld-Web-Mapper/1.0'
+      },
+      cache: 'no-store'
     });
 
     if (!response.ok) {
-      throw new Error(`API request failed with status ${response.status}`);
+      throw new Error(`API 요청 실패: ${response.status}`);
     }
 
     const data = await response.json();
@@ -50,11 +55,24 @@ async function callVWorldAPI(address: string): Promise<any> {
       throw new Error(data.response.error.text || '주소를 찾을 수 없습니다.');
     }
 
-    if (!data.response.result || !data.response.result.point) {
+    if (!data.response.result || data.response.result.length === 0) {
       throw new Error('주소를 찾을 수 없습니다.');
     }
 
-    return data;
+    const result = data.response.result[0];
+    if (!result.point) {
+      throw new Error('좌표 정보를 찾을 수 없습니다.');
+    }
+
+    return {
+      lat: parseFloat(result.point.y),
+      lng: parseFloat(result.point.x),
+      address: cleanAddress,
+      type: result.type,
+      zipcode: result.zipcode,
+      structure: result.structure
+    };
+
   } catch (error) {
     console.error('V-World API Error:', error);
     throw error;
@@ -73,25 +91,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // 주소 정제
-    const cleanAddress = (addr: string) => {
-      return addr
-        .replace(/\s+/g, ' ')
-        .trim()
-        .replace(/^경기\s/, '경기도 ');
-    };
+    const result = await callVWorldAPI(address);
 
-    const cleanedAddress = cleanAddress(address);
-    const data = await callVWorldAPI(cleanedAddress);
-
-    return NextResponse.json({
-      lat: parseFloat(data.response.result.point.y),
-      lng: parseFloat(data.response.result.point.x),
-      address: data.response.input.address,
-      refined: data.response.refined?.text || null,
-      type: data.response.refined?.type || null,
-      structure: data.response.refined?.structure || null
-    });
+    return NextResponse.json(result);
 
   } catch (error: any) {
     console.error('Error processing request:', error);
