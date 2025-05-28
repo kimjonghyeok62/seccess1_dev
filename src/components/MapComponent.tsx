@@ -7,6 +7,7 @@ import 'leaflet/dist/leaflet.css';
 declare global {
   interface Window {
     vw: any;
+    maps: any;
   }
 }
 
@@ -26,82 +27,101 @@ export interface MapComponentProps {
 const MapComponent = forwardRef<any, MapComponentProps>(({ markers }, ref) => {
   const mapRef = useRef<any>(null);
   const [mapType, setMapType] = useState<'base' | 'satellite' | 'hybrid'>('base');
-  const [isMapInitialized, setIsMapInitialized] = useState(false);
   const VWORLD_KEY = process.env.NEXT_PUBLIC_VWORLD_API_KEY;
   const mapContainerId = 'vmap';
 
-  const initializeMap = () => {
-    if (!window.vw || mapRef.current) return;
-
-    try {
-      const vw = window.vw;
-      const options = {
-        container: mapContainerId,
-        mapMode: "2d-map",
-        basemapType: vw.BasemapType.GRAPHIC,
-        controlDensity: vw.DensityType.EMPTY,
-        interactionDensity: vw.DensityType.BASIC,
-        controlsAutoArrange: true,
-        homePosition: vw.CameraPosition,
-        initPosition: vw.CameraPosition,
-      };
-
-      const mapController = new vw.MapController(options);
-      mapRef.current = mapController;
-      setIsMapInitialized(true);
-
-      // 마커 추가
-      if (markers.length > 0) {
-        markers.forEach((marker) => {
-          const markerSize = calculateMarkerSize(marker.count);
-          addMarker(mapController, marker, markerSize);
-        });
-
-        // 모든 마커가 보이도록 지도 영역 조정
-        const bounds = calculateBounds(markers);
-        mapController.zoomToExtent(bounds);
-      }
-    } catch (error) {
-      console.error('지도 초기화 중 오류 발생:', error);
-    }
-  };
-
   useEffect(() => {
-    const script = document.createElement('script');
-    const domain = typeof window !== 'undefined' ? window.location.hostname : '';
-    script.src = `http://map.vworld.kr/js/vworldMapInit.js.do?version=2.0&apiKey=${VWORLD_KEY}&domain=${domain}`;
-    script.async = true;
-    script.onload = () => {
-      initializeMap();
+    // VWorld 스크립트 로드
+    const loadVWorldScript = () => {
+      return new Promise<void>((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = `https://map.vworld.kr/js/vworldMapInit.js.do?version=2.0&apiKey=${VWORLD_KEY}`;
+        script.async = true;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('VWorld 스크립트 로드 실패'));
+        document.head.appendChild(script);
+      });
     };
-    document.head.appendChild(script);
+
+    const initializeMap = async () => {
+      try {
+        await loadVWorldScript();
+
+        const vw = window.vw;
+        if (!vw) {
+          console.error('VWorld API가 로드되지 않았습니다.');
+          return;
+        }
+
+        // 지도 옵션 설정
+        const options = {
+          container: mapContainerId,
+          mapMode: "2d-map",
+          basemapType: vw.BasemapType.GRAPHIC,
+          controlDensity: vw.DensityType.EMPTY,
+          interactionDensity: vw.DensityType.BASIC,
+          controlsAutoArrange: true,
+          homePosition: vw.CameraPosition,
+          initPosition: vw.CameraPosition
+        };
+
+        // 지도 생성
+        const map = new vw.Map(options);
+        mapRef.current = map;
+
+        // 초기 위치 설정 (대한민국 중심)
+        map.setCenter(new vw.CoordZ(127.5, 36.5, 7));
+
+        // 마커 추가
+        if (markers && markers.length > 0) {
+          markers.forEach((marker) => {
+            const size = calculateMarkerSize(marker.count);
+            addMarker(map, marker, size);
+          });
+
+          // 모든 마커가 보이도록 지도 영역 조정
+          const bounds = calculateBounds(markers);
+          if (bounds) {
+            map.setBounds(bounds);
+          }
+        }
+
+      } catch (error) {
+        console.error('지도 초기화 중 오류 발생:', error);
+      }
+    };
+
+    initializeMap();
 
     return () => {
-      if (script.parentNode) {
-        script.parentNode.removeChild(script);
-      }
       if (mapRef.current) {
+        mapRef.current.destroy();
         mapRef.current = null;
       }
     };
-  }, []);
+  }, [VWORLD_KEY]);
 
+  // 마커가 변경될 때마다 업데이트
   useEffect(() => {
-    if (isMapInitialized && mapRef.current && markers.length > 0) {
-      // 기존 마커 제거
-      mapRef.current.clearMarkers();
+    if (!mapRef.current || !markers) return;
 
-      // 새 마커 추가
-      markers.forEach((marker) => {
-        const markerSize = calculateMarkerSize(marker.count);
-        addMarker(mapRef.current, marker, markerSize);
-      });
+    const map = mapRef.current;
 
-      // 지도 영역 조정
-      const bounds = calculateBounds(markers);
-      mapRef.current.zoomToExtent(bounds);
+    // 기존 마커 제거
+    map.clearMarkers();
+
+    // 새 마커 추가
+    markers.forEach((marker) => {
+      const size = calculateMarkerSize(marker.count);
+      addMarker(map, marker, size);
+    });
+
+    // 지도 영역 조정
+    const bounds = calculateBounds(markers);
+    if (bounds) {
+      map.setBounds(bounds);
     }
-  }, [markers, isMapInitialized]);
+  }, [markers]);
 
   const calculateMarkerSize = (count: number) => {
     const k = 0.1111;
@@ -110,76 +130,64 @@ const MapComponent = forwardRef<any, MapComponentProps>(({ markers }, ref) => {
   };
 
   const calculateBounds = (markers: Marker[]) => {
-    if (markers.length === 0) return null;
-    
-    let minLat = markers[0].lat;
-    let maxLat = markers[0].lat;
-    let minLng = markers[0].lng;
-    let maxLng = markers[0].lng;
+    if (!markers || markers.length === 0) return null;
 
-    markers.forEach(marker => {
-      minLat = Math.min(minLat, marker.lat);
-      maxLat = Math.max(maxLat, marker.lat);
-      minLng = Math.min(minLng, marker.lng);
-      maxLng = Math.max(maxLng, marker.lng);
-    });
+    const lngs = markers.map(m => m.lng);
+    const lats = markers.map(m => m.lat);
 
-    return [minLng, minLat, maxLng, maxLat];
+    return {
+      sw: [Math.min(...lngs), Math.min(...lats)],
+      ne: [Math.max(...lngs), Math.max(...lats)]
+    };
   };
 
-  const addMarker = (mapController: any, marker: Marker, size: number) => {
+  const addMarker = (map: any, marker: Marker, size: number) => {
     try {
       const markerOptions = {
-        map: mapController,
+        map: map,
         position: [marker.lng, marker.lat],
         title: marker.address,
-        icon: {
-          size: [size * 2, size * 2],
-          anchor: [size, size],
-          html: `
-            <div style="
-              width: ${size * 2}px;
-              height: ${size * 2}px;
-              background-color: rgba(29, 78, 216, 0.6);
-              border: 1px solid #1e40af;
-              border-radius: 50%;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              color: white;
-              font-weight: bold;
-              text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
-              font-size: ${Math.max(12, Math.min(16, size * 0.5))}px;
-            ">
-              ${marker.count}
-            </div>
-          `
-        }
+        content: `
+          <div style="
+            width: ${size * 2}px;
+            height: ${size * 2}px;
+            background-color: rgba(29, 78, 216, 0.6);
+            border: 1px solid #1e40af;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+            font-size: ${Math.max(12, Math.min(16, size * 0.5))}px;
+          ">
+            ${marker.count}
+          </div>
+        `
       };
 
       const markerInstance = new window.vw.Marker(markerOptions);
-      
-      // 팝업 설정
-      markerInstance.on('click', () => {
-        const content = `
-          <div class="p-2 max-w-xs">
-            <p class="font-bold mb-1">${marker.address}</p>
-            <p class="text-sm text-gray-600">${marker.count}건</p>
-            ${marker.addresses.length > 0 ? `
-              <div class="mt-2 text-xs text-gray-500 max-h-32 overflow-y-auto">
-                ${marker.addresses.map(addr => `<p>${addr}</p>`).join('')}
-              </div>
-            ` : ''}
-          </div>
-        `;
 
-        const popup = new window.vw.Popup();
-        popup.setContent(content);
-        popup.setPosition(markerOptions.position);
-        mapController.addPopup(popup);
+      // 클릭 이벤트에 팝업 추가
+      markerInstance.on('click', () => {
+        const infoWindow = new window.vw.InfoWindow({
+          map: map,
+          position: [marker.lng, marker.lat],
+          content: `
+            <div class="p-2 max-w-xs">
+              <p class="font-bold mb-1">${marker.address}</p>
+              <p class="text-sm text-gray-600">${marker.count}건</p>
+              ${marker.addresses.length > 0 ? `
+                <div class="mt-2 text-xs text-gray-500 max-h-32 overflow-y-auto">
+                  ${marker.addresses.map(addr => `<p>${addr}</p>`).join('')}
+                </div>
+              ` : ''}
+            </div>
+          `
+        });
       });
 
-      mapController.addMarker(markerInstance);
     } catch (error) {
       console.error('마커 추가 중 오류 발생:', error);
     }
@@ -189,13 +197,19 @@ const MapComponent = forwardRef<any, MapComponentProps>(({ markers }, ref) => {
     if (!mapRef.current) return;
 
     setMapType(type);
+    const map = mapRef.current;
+    
     try {
-      const mapTypes = {
-        base: window.vw.BasemapType.GRAPHIC,
-        satellite: window.vw.BasemapType.SATELLITE,
-        hybrid: window.vw.BasemapType.HYBRID
-      };
-      mapRef.current.setBasemapType(mapTypes[type]);
+      switch (type) {
+        case 'satellite':
+          map.setBasemapType(window.vw.BasemapType.SATELLITE);
+          break;
+        case 'hybrid':
+          map.setBasemapType(window.vw.BasemapType.HYBRID);
+          break;
+        default:
+          map.setBasemapType(window.vw.BasemapType.GRAPHIC);
+      }
     } catch (error) {
       console.error('지도 타입 변경 중 오류 발생:', error);
     }
