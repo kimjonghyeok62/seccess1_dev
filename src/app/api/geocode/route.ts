@@ -48,7 +48,7 @@ async function searchAddress(address: string): Promise<any> {
   });
 
   try {
-    const apiUrl = `/api/v/address?${params.toString()}`;
+    const apiUrl = `/api/req/address?${params.toString()}`;
     console.log('API 요청 URL:', apiUrl);
 
     const response = await fetch(apiUrl, {
@@ -101,7 +101,9 @@ async function searchAddress(address: string): Promise<any> {
       lng: parseFloat(result.point.x),
       address: cleanAddress,
       type: 'road',
-      original: address
+      original: address,
+      point: result.point,
+      structure: result.structure
     };
 
     console.log('최종 응답 데이터:', response_data);
