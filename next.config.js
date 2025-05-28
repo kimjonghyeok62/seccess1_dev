@@ -41,20 +41,20 @@ const nextConfig = {
             key: 'Strict-Transport-Security',
             value: 'max-age=31536000; includeSubDomains',
           },
+          {
+            key: 'Access-Control-Allow-Origin',
+            value: '*',
+          },
+          {
+            key: 'Access-Control-Allow-Methods',
+            value: 'GET, POST, PUT, DELETE, OPTIONS',
+          },
+          {
+            key: 'Access-Control-Allow-Headers',
+            value: 'X-Requested-With, Content-Type, Authorization',
+          },
         ],
       },
-    ];
-  },
-  async rewrites() {
-    return [
-      {
-        source: '/api/req/:path*',
-        destination: 'http://api.vworld.kr/req/:path*'
-      },
-      {
-        source: '/api/wmts/:path*',
-        destination: 'http://api.vworld.kr/req/wmts/:path*'
-      }
     ];
   },
 };
