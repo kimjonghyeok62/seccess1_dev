@@ -6,7 +6,6 @@ interface AddressSearchProps {
     lat: number;
     lng: number;
     address: string;
-    refinement?: string;
   }) => void;
   onError?: (error: string) => void;
 }
@@ -37,12 +36,12 @@ const AddressSearch: React.FC<AddressSearchProps> = ({ onAddressFound, onError }
       onAddressFound({
         lat: data.lat,
         lng: data.lng,
-        address: data.address,
-        refinement: data.refinement
+        address: data.address
       });
       
       setAddress('');
     } catch (error: any) {
+      console.error('Search error:', error);
       const errorMessage = error.message || '주소 검색 중 오류가 발생했습니다.';
       setError(errorMessage);
       if (onError) {
@@ -63,15 +62,15 @@ const AddressSearch: React.FC<AddressSearchProps> = ({ onAddressFound, onError }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    searchAddress(address);
+    if (address.trim()) {
+      searchAddress(address);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setAddress(value);
-    if (value.length > 2) {
-      debouncedSearch(value);
-    }
+    setError(null);
   };
 
   return (
@@ -91,7 +90,7 @@ const AddressSearch: React.FC<AddressSearchProps> = ({ onAddressFound, onError }
             className={`px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
               isLoading ? 'opacity-50 cursor-not-allowed' : ''
             }`}
-            disabled={isLoading}
+            disabled={isLoading || !address.trim()}
           >
             {isLoading ? '검색 중...' : '검색'}
           </button>

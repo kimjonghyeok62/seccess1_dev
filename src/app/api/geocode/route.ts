@@ -1,38 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const VWORLD_API_KEY = process.env.NEXT_PUBLIC_VWORLD_API_KEY;
-const VWORLD_API_DOMAIN = 'http://api.vworld.kr';
 
-interface VWorldResponse {
-  response: {
-    service: string;
-    status: string;
-    input: {
-      point: { x: string; y: string };
-      address: string;
-      type: string;
-    };
-    result: {
-      point: { x: string; y: string };
-      address: {
-        road: string;
-        parcel: string;
-        refinement?: string;
-      };
-    }[];
-  };
-}
-
-async function searchAddress(address: string): Promise<VWorldResponse> {
+async function searchAddress(address: string): Promise<any> {
   if (!VWORLD_API_KEY) {
     throw new Error('API 키가 설정되지 않았습니다.');
   }
 
+  // 주소 정제
   const cleanAddress = address
     .replace(/\s+/g, ' ')
     .trim()
     .replace(/^경기\s/, '경기도 ');
 
+  // API 요청 URL 구성
   const params = new URLSearchParams({
     service: 'address',
     request: 'getcoord',
@@ -43,16 +24,20 @@ async function searchAddress(address: string): Promise<VWorldResponse> {
     simple: 'false',
     format: 'json',
     type: 'road',
-    key: VWORLD_API_KEY
+    key: VWORLD_API_KEY,
+    domain: process.env.VERCEL_URL || 'localhost:3000'
   });
 
   try {
-    const response = await fetch(`${VWORLD_API_DOMAIN}/req/address?${params.toString()}`, {
+    // 직접 프록시 URL 사용
+    const proxyUrl = `/api/vworld/req/address?${params.toString()}`;
+    console.log('Requesting URL:', proxyUrl);
+
+    const response = await fetch(proxyUrl, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'User-Agent': 'VWorld-Web-Mapper/1.0'
+        'Content-Type': 'application/json'
       }
     });
 
@@ -65,7 +50,22 @@ async function searchAddress(address: string): Promise<VWorldResponse> {
     const data = await response.json();
     console.log('V-World API Response:', data);
 
-    return data;
+    if (data.response.status === 'ERROR') {
+      throw new Error(data.response.error.text || '주소를 찾을 수 없습니다.');
+    }
+
+    if (!data.response.result || data.response.result.length === 0) {
+      throw new Error('주소를 찾을 수 없습니다.');
+    }
+
+    const result = data.response.result[0];
+    return {
+      lat: parseFloat(result.point.y),
+      lng: parseFloat(result.point.x),
+      address: cleanAddress,
+      type: 'road'
+    };
+
   } catch (error) {
     console.error('V-World API Error:', error);
     throw error;
@@ -84,23 +84,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const data = await searchAddress(address);
-
-    if (data.response.status === 'ERROR') {
-      throw new Error(data.response.input?.address ? '주소를 찾을 수 없습니다.' : '잘못된 주소 형식입니다.');
-    }
-
-    if (!data.response.result || data.response.result.length === 0) {
-      throw new Error('주소를 찾을 수 없습니다.');
-    }
-
-    const result = data.response.result[0];
-    return NextResponse.json({
-      lat: parseFloat(result.point.y),
-      lng: parseFloat(result.point.x),
-      address: result.address.road || result.address.parcel,
-      refinement: result.address.refinement
-    });
+    const result = await searchAddress(address);
+    return NextResponse.json(result);
 
   } catch (error: any) {
     console.error('Error processing request:', error);
