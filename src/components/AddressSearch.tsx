@@ -14,36 +14,61 @@ const AddressSearch: React.FC<AddressSearchProps> = ({ onAddressFound, onError }
   const [address, setAddress] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<any>(null);
 
   const searchAddress = useCallback(async (searchText: string) => {
+    console.group('주소 검색 시작');
+    console.log('검색할 주소:', searchText);
+    
     if (!searchText.trim()) {
+      console.warn('빈 주소 입력');
       setError('주소를 입력해주세요.');
+      console.groupEnd();
       return;
     }
 
     setIsLoading(true);
     setError(null);
+    setDebugInfo(null);
 
     try {
-      // 주소에서 불필요한 부분 제거
+      // 주소 정제 과정 로깅
       const cleanAddress = searchText
         .split(',')[0]
         .replace(/\s*\d+호\s*$/, '')
         .replace(/\s*(아파트|APT|상가|빌딩|오피스텔)\s*$/, '')
         .trim();
+      
+      console.log('정제된 주소:', cleanAddress);
 
       const encodedAddress = encodeURIComponent(cleanAddress);
-      console.log('검색할 주소:', cleanAddress); // 디버깅용 로그
+      const requestUrl = `/api/geocode?address=${encodedAddress}`;
+      console.log('요청 URL:', requestUrl);
 
-      const response = await fetch(`/api/geocode?address=${encodedAddress}`, {
+      const startTime = performance.now();
+      const response = await fetch(requestUrl, {
         headers: {
           'Accept': 'application/json',
           'Cache-Control': 'no-cache'
         }
       });
+      const endTime = performance.now();
+
+      console.log('응답 시간:', Math.round(endTime - startTime), 'ms');
+      console.log('응답 상태:', response.status, response.statusText);
+      console.log('응답 헤더:', Object.fromEntries(response.headers.entries()));
 
       const data = await response.json();
-      console.log('API 응답:', data); // 디버깅용 로그
+      console.log('API 응답:', data);
+
+      // 디버그 정보 저장
+      setDebugInfo({
+        requestUrl,
+        responseTime: Math.round(endTime - startTime),
+        responseStatus: response.status,
+        responseHeaders: Object.fromEntries(response.headers.entries()),
+        responseData: data
+      });
 
       if (!response.ok) {
         throw new Error(data.error || '주소를 찾을 수 없습니다.');
@@ -66,6 +91,7 @@ const AddressSearch: React.FC<AddressSearchProps> = ({ onAddressFound, onError }
       }
     } finally {
       setIsLoading(false);
+      console.groupEnd();
     }
   }, [onAddressFound, onError]);
 
@@ -115,6 +141,16 @@ const AddressSearch: React.FC<AddressSearchProps> = ({ onAddressFound, onError }
         {error && (
           <div className="text-red-500 text-sm mt-1 bg-red-50 p-2 rounded">
             {error}
+          </div>
+        )}
+        {process.env.NODE_ENV === 'development' && debugInfo && (
+          <div className="mt-4 p-2 bg-gray-100 rounded text-xs">
+            <details>
+              <summary className="cursor-pointer font-bold">디버그 정보</summary>
+              <pre className="mt-2 whitespace-pre-wrap">
+                {JSON.stringify(debugInfo, null, 2)}
+              </pre>
+            </details>
           </div>
         )}
         <div className="text-gray-500 text-xs mt-1">
