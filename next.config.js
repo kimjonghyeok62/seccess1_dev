@@ -54,13 +54,7 @@ const nextConfig = {
     return [
       {
         source: '/api/vworld/:path*',
-        destination: 'https://api.vworld.kr/:path*',
-        has: [
-          {
-            type: 'header',
-            key: 'x-vworld-key',
-          },
-        ],
+        destination: 'http://api.vworld.kr/:path*',
       },
     ];
   },

@@ -11,7 +11,6 @@ interface GeocodingResult {
 // VWorld API 호출 함수
 async function callVWorldAPI(address: string): Promise<any> {
   const VWORLD_API_KEY = process.env.NEXT_PUBLIC_VWORLD_API_KEY;
-  const domain = process.env.VERCEL_URL || 'localhost:3000';
   
   if (!VWORLD_API_KEY) {
     console.error('VWORLD_API_KEY is not set');
@@ -30,24 +29,35 @@ async function callVWorldAPI(address: string): Promise<any> {
   // URL 인코딩
   const encodedAddress = encodeURIComponent(cleanAddress);
 
-  const url = `https://api.vworld.kr/req/address?service=address&request=getCoord&version=2.0&crs=epsg:4326&address=${encodedAddress}&refine=true&simple=false&format=json&type=road&key=${VWORLD_API_KEY}&domain=${domain}`;
+  // API 엔드포인트 URL 구성
+  const baseUrl = 'http://api.vworld.kr/req/search';
+  const params = new URLSearchParams({
+    service: 'search',
+    request: 'search',
+    version: '2.0',
+    crs: 'EPSG:4326',
+    size: '1000',
+    page: '1',
+    query: cleanAddress,
+    type: 'address',
+    category: 'road',
+    format: 'json',
+    errorformat: 'json',
+    key: VWORLD_API_KEY
+  });
 
   try {
-    const response = await fetch(url, {
+    const response = await fetch(`${baseUrl}?${params.toString()}`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'User-Agent': 'VWorld-Web-Mapper/1.0',
-        'Referer': `https://${domain}`,
-        'Origin': `https://${domain}`
-      },
-      cache: 'no-store'
+        'Content-Type': 'application/json'
+      }
     });
 
     if (!response.ok) {
-      console.error('API Response:', await response.text());
+      const errorText = await response.text();
+      console.error('API Response Error:', errorText);
       throw new Error(`API 요청 실패: ${response.status}`);
     }
 
@@ -59,22 +69,22 @@ async function callVWorldAPI(address: string): Promise<any> {
       throw new Error(data.response.error.text || '주소를 찾을 수 없습니다.');
     }
 
-    if (!data.response.result || data.response.result.length === 0) {
+    if (!data.response.result || !data.response.result.items || data.response.result.items.length === 0) {
       throw new Error('주소를 찾을 수 없습니다.');
     }
 
-    const result = data.response.result[0];
-    if (!result.point) {
+    const item = data.response.result.items[0];
+    if (!item.point) {
       throw new Error('좌표 정보를 찾을 수 없습니다.');
     }
 
     return {
-      lat: parseFloat(result.point.y),
-      lng: parseFloat(result.point.x),
-      address: cleanAddress,
-      type: result.type,
-      zipcode: result.zipcode,
-      structure: result.structure
+      lat: parseFloat(item.point.y),
+      lng: parseFloat(item.point.x),
+      address: item.address.road || item.address.parcel,
+      type: 'road',
+      title: item.title,
+      category: item.category
     };
 
   } catch (error) {
