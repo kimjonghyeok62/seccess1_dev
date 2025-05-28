@@ -48,8 +48,8 @@ const nextConfig = {
   async rewrites() {
     return [
       {
-        source: '/api/address',
-        destination: 'https://api.vworld.kr/req/address',
+        source: '/api/vworld/:path*',
+        destination: 'https://api.vworld.kr/:path*'
       }
     ];
   },

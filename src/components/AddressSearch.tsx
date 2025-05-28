@@ -25,9 +25,25 @@ const AddressSearch: React.FC<AddressSearchProps> = ({ onAddressFound, onError }
     setError(null);
 
     try {
-      const encodedAddress = encodeURIComponent(searchText.trim());
-      const response = await fetch(`/api/geocode?address=${encodedAddress}`);
+      // 주소에서 불필요한 부분 제거
+      const cleanAddress = searchText
+        .split(',')[0]
+        .replace(/\s*\d+호\s*$/, '')
+        .replace(/\s*(아파트|APT|상가|빌딩|오피스텔)\s*$/, '')
+        .trim();
+
+      const encodedAddress = encodeURIComponent(cleanAddress);
+      console.log('검색할 주소:', cleanAddress); // 디버깅용 로그
+
+      const response = await fetch(`/api/geocode?address=${encodedAddress}`, {
+        headers: {
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache'
+        }
+      });
+
       const data = await response.json();
+      console.log('API 응답:', data); // 디버깅용 로그
 
       if (!response.ok) {
         throw new Error(data.error || '주소를 찾을 수 없습니다.');
@@ -40,8 +56,9 @@ const AddressSearch: React.FC<AddressSearchProps> = ({ onAddressFound, onError }
       });
       
       setAddress('');
+      setError(null);
     } catch (error: any) {
-      console.error('Search error:', error);
+      console.error('검색 오류:', error);
       const errorMessage = error.message || '주소 검색 중 오류가 발생했습니다.';
       setError(errorMessage);
       if (onError) {
